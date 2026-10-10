@@ -339,6 +339,77 @@
   }
   body.modal-open{overflow:hidden;}
 
+  /* —— 海报点击放大（lightbox） —— */
+  .poster-track img{cursor:zoom-in;transition:filter .15s, transform .15s;}
+  .poster-track img:hover{filter:brightness(1.06) drop-shadow(0 4px 10px rgba(0,0,0,.15));}
+  .poster-lightbox{
+    position:fixed;inset:0;z-index:1100;
+    display:none;align-items:center;justify-content:center;
+    padding:32px;
+  }
+  .poster-lightbox.show{display:flex;}
+  .poster-lightbox .lb-mask{
+    position:absolute;inset:0;
+    background:rgba(245,247,252,.35);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    cursor:zoom-out;
+  }
+  .poster-lightbox .lb-figure{
+    position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;
+    max-width:min(92vw, 760px);max-height:92vh;
+    animation:modal-card-in .32s cubic-bezier(.2,.9,.4,1) forwards;
+  }
+  .poster-lightbox .lb-img{
+    max-width:100%;max-height:calc(92vh - 70px);
+    width:auto;height:auto;
+    border-radius:14px;box-shadow:0 28px 70px rgba(0,0,0,.5);
+    background:#000;
+    object-fit:contain;
+    transition:opacity .18s ease;
+  }
+  .poster-lightbox.is-switching .lb-img{opacity:0;}
+  .poster-lightbox .lb-cap{
+    font-size:12px;color:var(--ink);font-weight:500;
+    letter-spacing:.4px;
+    text-align:center;max-width:90%;
+    display:flex;align-items:center;gap:14px;
+  }
+  .poster-lightbox .lb-cap-text{flex:1;text-align:center;}
+  .poster-lightbox .lb-counter{
+    padding:3px 9px;border-radius:999px;
+    background:#EDF5FF;color:var(--blue-deep);font-weight:700;font-size:11px;
+    letter-spacing:.6px;
+  }
+  .poster-lightbox .lb-close{
+    position:absolute;top:-14px;right:-14px;
+    width:38px;height:38px;border-radius:50%;
+    border:none;background:#fff;color:var(--blue-deep);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 16px rgba(0,0,0,.35);
+    transition:transform .15s, background .15s;z-index:3;
+  }
+  .poster-lightbox .lb-close:hover{transform:scale(1.06);background:#F2F7FF;}
+  .poster-lightbox .lb-close svg{width:18px;height:18px;}
+  .poster-lightbox .lb-arrow{
+    position:absolute;top:50%;transform:translateY(-50%);
+    width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;
+    background:rgba(255,255,255,.92);color:#1A2B4C;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);
+    transition:background .15s,transform .15s;z-index:2;
+  }
+  .poster-lightbox .lb-arrow:hover{background:#fff;transform:translateY(-50%) scale(1.06);}
+  .poster-lightbox .lb-arrow:focus-visible{outline:2px solid var(--blue);outline-offset:3px;}
+  .poster-lightbox .lb-arrow svg{width:22px;height:22px;}
+  .poster-lightbox .lb-prev{left:-66px;}
+  .poster-lightbox .lb-next{right:-66px;}
+  @media (max-width:900px){
+    .poster-lightbox .lb-prev{left:-14px;}
+    .poster-lightbox .lb-next{right:-14px;}
+  }
+  .poster-lightbox.no-nav .lb-arrow{display:none;}
+  body.lb-open{overflow:hidden;}
+
   /* —— 图占位（统一斜纹卡） —— */
   .hobby-gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
   .img-slot{
@@ -954,6 +1025,27 @@
     </div>
   </div>
 
+  <!-- 海报点击放大全屏查看（可左右翻） -->
+  <div class="poster-lightbox no-nav" id="posterLightbox" aria-hidden="true">
+    <div class="lb-mask"></div>
+    <figure class="lb-figure">
+      <button class="lb-arrow lb-prev" type="button" aria-label="上一张">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="lb-arrow lb-next" type="button" aria-label="下一张">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="lb-close" type="button" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <img class="lb-img" alt="">
+      <figcaption class="lb-cap">
+        <span class="lb-cap-text"></span>
+        <span class="lb-counter">1 / 1</span>
+      </figcaption>
+    </figure>
+  </div>
+
   <!-- ========== Footer ========== -->
   <footer>
     <div class="foot-row">
@@ -1306,6 +1398,83 @@
       posterGo(parseInt(dot.getAttribute("data-dot"), 10));
       return;
     }
+    /* —— 海报图片：点击放大全屏 —— */
+    var posterImg = e.target.closest(".poster-track img");
+    if (posterImg) {
+      e.preventDefault(); e.stopPropagation();
+      openPosterLightbox(posterImg);
+      return;
+    }
+  });
+
+  /* —— 海报点击放大：lightbox（可左右翻） —— */
+  var lbEl       = document.getElementById("posterLightbox");
+  var lbImg      = lbEl.querySelector(".lb-img");
+  var lbCapText  = lbEl.querySelector(".lb-cap-text");
+  var lbCounter  = lbEl.querySelector(".lb-counter");
+  var lbMask     = lbEl.querySelector(".lb-mask");
+  var lbCloseBtn = lbEl.querySelector(".lb-close");
+  var lbPrevBtn  = lbEl.querySelector(".lb-prev");
+  var lbNextBtn  = lbEl.querySelector(".lb-next");
+  var lbImgs     = [];   /* 当前 lightbox 中可翻看的图片集合 */
+  var lbIdx      = 0;    /* 当前展示的索引 */
+
+  function lbRender() {
+    var cur = lbImgs[lbIdx];
+    if (!cur) return;
+    lbImg.style.opacity = "0";
+    /* 等淡出再换图，避免切换时硬闪 */
+    setTimeout(function () {
+      lbImg.src = cur.getAttribute("src");
+      lbImg.alt = cur.getAttribute("alt") || "";
+      lbCapText.textContent = cur.getAttribute("alt") || "";
+      lbCounter.textContent = (lbIdx + 1) + " / " + lbImgs.length;
+      lbImg.style.opacity = "";
+    }, 140);
+  }
+  function lbGo(i) {
+    if (!lbImgs.length) return;
+    var n = lbImgs.length;
+    lbIdx = ((i % n) + n) % n;   /* 兼容负数循环 */
+    lbRender();
+  }
+
+  function openPosterLightbox(img) {
+    /* 收集同一轮播里的全部图片，保证 lightbox 翻页与弹窗轮播一致 */
+    var track = img.closest(".poster-track");
+    lbImgs = track ? Array.prototype.slice.call(track.querySelectorAll("img")) : [img];
+    /* 找到被点击那张的索引 */
+    lbIdx = Math.max(0, lbImgs.indexOf(img));
+    lbEl.classList.toggle("no-nav", lbImgs.length <= 1);
+    /* 先把图片写一次，避免 setTimeout 0 延迟造成首帧空白 */
+    lbImg.src = img.getAttribute("src");
+    lbImg.alt = img.getAttribute("alt") || "";
+    lbCapText.textContent = img.getAttribute("alt") || "";
+    lbCounter.textContent = (lbIdx + 1) + " / " + lbImgs.length;
+    lbEl.classList.add("show");
+    lbEl.setAttribute("aria-hidden", "false");
+    document.body.classList.add("lb-open");
+  }
+  function closePosterLightbox() {
+    lbEl.classList.remove("show");
+    lbEl.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("lb-open");
+    lbImgs = [];
+    lbIdx = 0;
+    /* 释放大图，避免下次打开旧图先闪一下 */
+    setTimeout(function () { lbImg.src = ""; }, 200);
+  }
+  lbMask.addEventListener("click", closePosterLightbox);
+  lbCloseBtn.addEventListener("click", closePosterLightbox);
+  lbPrevBtn.addEventListener("click", function (e) { e.stopPropagation(); lbGo(lbIdx - 1); });
+  lbNextBtn.addEventListener("click", function (e) { e.stopPropagation(); lbGo(lbIdx + 1); });
+  /* 点图片本身不再关闭（避免与翻页冲突）；想关就点背景 / ✕ / Esc */
+  /* Esc 关闭、←→ 翻页 */
+  document.addEventListener("keydown", function (e) {
+    if (!lbEl.classList.contains("show")) return;
+    if (e.key === "Escape")        { closePosterLightbox(); }
+    else if (e.key === "ArrowLeft" && lbImgs.length > 1){ e.preventDefault(); lbGo(lbIdx - 1); }
+    else if (e.key === "ArrowRight"&& lbImgs.length > 1){ e.preventDefault(); lbGo(lbIdx + 1); }
   });
 
   /* —— 听歌：唱片机按钮 + 歌单（可点击播放） —— */
