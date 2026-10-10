@@ -1076,7 +1076,7 @@
    * ============================================================ */
   var LLM_CONFIG = {
     provider: "deepseek",   // deepseek / zhipu / moonshot / openai
-    apiKey:   "",           // ← 在这里粘贴你的 Key（首次访问后用浏览器控制台输入 localStorage.setItem('sjr_llm_key','sk-你的Key')）
+    apiKey:   "sk-3a585fe95e69405f8f9c57a8af005116",           // ← 在这里粘贴你的 Key（首次访问后用浏览器控制台输入 localStorage.setItem('sjr_llm_key','sk-你的Key')）
     model:    "deepseek-chat"            // 留空使用默认模型
   };
   var LLM_ENDPOINTS = {
@@ -1109,7 +1109,7 @@
 
   var chatBody = document.getElementById("chatBody");
   var input = document.getElementById("chatInput");
-  var history = [];   // 上下文：[{role, content}]
+  var chatHistory = [];   // 上下文：[{role, content}]（不能叫 history，会撞上浏览器内置的 window.history）
 
   /* —— 气泡渲染 —— */
   var AVATAR_SVG = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6.5 C4 5.7 4.7 5 5.5 5 L12.5 5 C13.3 5 14 5.7 14 6.5 L14 10.5 C14 11.3 13.3 12 12.5 12 L8 12 L5.5 14.2 L5.5 12 C4.7 12 4 11.3 4 10.5 Z" fill="#FFFFFF"/></svg>';
@@ -1159,7 +1159,8 @@
   var LLM_TIMEOUT_MS = 20000;
 
   function askLLM(q, bubble) {
-    var msgs = [{ role: "system", content: SYSTEM_PROMPT }].concat(history.slice(-10), [{ role: "user", content: q }]);
+    var got = "";   // 流式累计的回答（声明在这里，后面两个 .then 都要用）
+    var msgs = [{ role: "system", content: SYSTEM_PROMPT }].concat(chatHistory.slice(-10), [{ role: "user", content: q }]);
 
     /* 超时控制：20 秒还没出第一个字就放弃，回退本地回答 */
     var ac = new AbortController();
@@ -1176,13 +1177,15 @@
       var reader  = r.body.getReader();
       var decoder = new TextDecoder("utf-8");
       var buf     = "";
-      var got     = "";
       bubble.classList.remove("typing");
       bubble.textContent = "";
       bubble.classList.add("streaming");
       function pump() {
         return reader.read().then(function (d) {
           if (d.done) return;
+          /* 每收到一段就重置超时：只有持续 20 秒无任何输出才放弃 */
+          clearTimeout(timer);
+          timer = setTimeout(function () { ac.abort(); }, LLM_TIMEOUT_MS);
           buf += decoder.decode(d.value, { stream: true });
           var lines = buf.split("\n");
           buf = lines.pop();
@@ -1209,13 +1212,14 @@
       clearTimeout(timer);
       bubble.classList.remove("streaming");
       if (got.trim()) {
-        history.push({ role: "user", content: q }, { role: "assistant", content: got.trim() });
+        chatHistory.push({ role: "user", content: q }, { role: "assistant", content: got.trim() });
       } else {
         /* 流式走完但没拿到任何字（极少见），回退本地 */
         bubble.textContent = localAnswer(q);
       }
-    }).catch(function () {
-      /* 网络错误 / 超时 / HTTP 非 200 —— 静默回退 */
+    }).catch(function (err) {
+      /* 网络错误 / 超时 / HTTP 非 200 —— 界面上静默回退，控制台留一条记录方便排查 */
+      console.warn("[小佳] 大模型调用失败，已回退本地回答：", err);
       clearTimeout(timer);
       bubble.classList.remove("streaming", "typing");
       bubble.textContent = localAnswer(q);
